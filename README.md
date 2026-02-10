@@ -6,7 +6,7 @@ Built for [**Vibe Coding: Building Software in Conversation with AI (TECH 42)**]
 
 ## Play
 
-Open `index.html` in any browser. No install, no dependencies, no build step.
+**[Play it now](https://chrbailey.github.io/word-drop/)** — or open `index.html` locally. No install, no dependencies, no build step.
 
 ## How It Works
 
