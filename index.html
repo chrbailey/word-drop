@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Drop</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    overflow: hidden;
+    background: #0a0a1a;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    height: 100vh;
+    width: 100vw;
+  }
+  canvas {
+    display: block;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 16px 24px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .hud-item {
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 0 0 10px rgba(0,0,0,0.8);
+  }
+  .hud-item span { font-weight: 700; }
+  .hud-label { opacity: 0.6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Input area */
+  #input-area {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+  }
+  #word-input {
+    width: 320px;
+    padding: 14px 24px;
+    font-size: 24px;
+    font-family: inherit;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    background: rgba(10,10,30,0.85);
+    color: #fff;
+    outline: none;
+    letter-spacing: 2px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s;
+  }
+  #word-input:focus {
+    border-color: rgba(100,200,255,0.6);
+    box-shadow: 0 0 20px rgba(100,200,255,0.15);
+  }
+  #word-input::placeholder { color: rgba(255,255,255,0.25); }
+
+  /* Game Over overlay */
+  #game-over {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(5,5,20,0.92);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  #game-over.visible { display: flex; }
+  #game-over h1 {
+    font-size: 56px;
+    color: #ff4466;
+    margin-bottom: 32px;
+    text-shadow: 0 0 30px rgba(255,68,102,0.5);
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    width: 300px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    color: #ccc;
+    font-size: 18px;
+  }
+  .stat-row .val { color: #fff; font-weight: 700; }
+  #play-again {
+    margin-top: 36px;
+    padding: 14px 48px;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: inherit;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #4488ff, #6644ff);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  #play-again:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(100,68,255,0.4);
+  }
+
+  /* Start screen */
+  #start-screen {
+    position: absolute;
+    inset: 0;
+    background: rgba(5,5,20,0.95);
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+  }
+  #start-screen.hidden { display: none; }
+  #start-screen h1 {
+    font-size: 64px;
+    color: #fff;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #4488ff, #ff4466);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  #start-screen p {
+    color: rgba(255,255,255,0.5);
+    font-size: 18px;
+    margin-bottom: 40px;
+  }
+  #start-btn {
+    padding: 16px 56px;
+    font-size: 22px;
+    font-weight: 700;
+    font-family: inherit;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #4488ff, #6644ff);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  #start-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(100,68,255,0.4);
+  }
+
+  /* Red flash overlay */
+  #flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,0,0,0.15);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 5;
+  }
+  #flash.active { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="hud-item"><div class="hud-label">Score</div><span id="h-score">0</span></div>
+  <div class="hud-item"><div class="hud-label">Level</div><span id="h-level">1</span></div>
+  <div class="hud-item"><div class="hud-label">Combo</div><span id="h-combo">0</span></div>
+  <div class="hud-item"><div class="hud-label">Lives</div><span id="h-lives">3</span></div>
+</div>
+
+<div id="input-area">
+  <input type="text" id="word-input" placeholder="type here..." autocomplete="off" autocapitalize="off" spellcheck="false">
+</div>
+
+<div id="flash"></div>
+
+<div id="start-screen">
+  <h1>Word Drop</h1>
+  <p>Type the falling words before they reach the bottom!</p>
+  <button id="start-btn">Start Game</button>
+</div>
+
+<div id="game-over">
+  <h1>Game Over</h1>
+  <div class="stat-row"><span>Score</span><span class="val" id="s-score">0</span></div>
+  <div class="stat-row"><span>Words Destroyed</span><span class="val" id="s-words">0</span></div>
+  <div class="stat-row"><span>Max Combo</span><span class="val" id="s-combo">0</span></div>
+  <div class="stat-row"><span>Time Survived</span><span class="val" id="s-time">0s</span></div>
+  <div class="stat-row"><span>Level Reached</span><span class="val" id="s-level">1</span></div>
+  <button id="play-again">Play Again</button>
+</div>
+
+<script>
+// ── Word Pool ──
+const WORDS_SHORT  = ["the","and","for","are","but","not","you","all","can","had","her","was","one","our","out","day","get","has","him","his","how","its","may","new","now","old","see","way","who","boy","did","let","put","say","she","too","use","big","cat","dog","eat","end","far","few","got","hot","ice","job","key","lot","map","net","off","pay","ran","red","run","sat","set","sun","top","try","war","win","yet","add","age","ago","air","ask","bad","bag","bed","bit","box","bus","cut","dry","ear","eye","fit","fly","fun","gas","hat","hit","law","lay","leg","lie","low","mix","nor","oil","own","pan","pen","per","pie","pop","raw","row","sea","sir","sit","six","ski","sky","son","ten","tie","tip","two","van","wet","win","won","yes","zoo","arm","art","bar","bee","bow","bug","cab","cap","cow","cry","cup","dam","dig","dip","dot","dye","fan","fig","fog","fur","gap","gym","hen","hid","hug","ink","ion","ivy","jam","jar","jaw","joy","jug","kit","lab","lap","lip","log","mad","mat","mob","mod","mud","mug","nap","nut","oak","odd","ore","owe","pad","pet","pig","pin","pit","pot","pub","pup","rag","ram","rat","rib","rim","rip","rod","rot","rub","rug","sad","sap","sew","shy","sip","sob","sod","spy","sum","tab","tag","tan","tap","tar","tax","tin","toe","ton","toy","tub","tug","vet","vow","wig","wit","wok","yam","yap","zap","zen","zig","zip"];
+const WORDS_MEDIUM = ["about","after","again","being","could","every","first","found","great","house","large","learn","never","other","place","plant","point","right","small","sound","spell","still","study","their","there","these","thing","think","three","water","where","which","world","would","write","beach","brain","candy","dance","early","faith","ghost","happy","juice","knife","laugh","magic","night","ocean","piano","queen","radio","shape","table","under","video","watch","young","zebra","angel","climb","dream","empty","flame","grape","heart","ivory","jolly","kneel","lunar","maple","noble","olive","pearl","quiet","river","stone","tower","ultra","vault","wheat","yield","alien","bloom","charm","drift","eagle","frost","gleam","hover","orbit","pride","quest","reign","steam","trace","vivid","whale","azure","blaze","chase","coral","dodge","ember","flora","grime","haste","index","jewel","knack","lemon","march","nerve","opera","plume","quilt","roast","siege","thorn","unify"];
+const WORDS_LONG   = ["balance","because","between","captain","chapter","country","develop","display","evening","example","explore","fiction","forward","general","history","imagine","journey","justice","kitchen","laundry","library","machine","measure","million","musical","natural","nuclear","observe","opinion","organic","outside","package","pattern","picture","plastic","popular","prepare","present","private","problem","produce","program","project","protect","provide","purpose","quality","quarter","quickly","rainbow","reality","receive","release","replace","require","respect","roughly","science","section","serious","shelter","silence","similar","society","station","strange","student","success","suggest","support","surface","teacher","thought","thunder","tonight","trouble","uniform","unusual","variety","village","virtual","weather","welcome","western","whisper","without","writing","chamber","climate","comfort","connect","courage","crystal","culture","curious","diamond","economy","emotion","finance","forever","freedom","gallery","genuine","habitat","harvest","insight","journal","kingdom","lecture","liberty","mandate","miracle","mystery","neglect","novelty","obscure","outline","passage","phantom","pioneer","pottery","preview","profile","publish","pursuit","radical","restore","sandals","scholar","therapy","toaster","triumph","turbine","umbrella","vaccine","verdict","vintage","voyager","warrior","witness"];
+
+// ── Canvas Setup ──
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Game State ──
+let state;
+function initState() {
+  state = {
+    words: [],
+    particles: [],
+    popups: [],
+    score: 0,
+    lives: 3,
+    level: 1,
+    combo: 0,
+    maxCombo: 0,
+    wordsDestroyed: 0,
+    gameOver: false,
+    startTime: Date.now(),
+    lastSpawn: 0,
+    spawnInterval: 2000,
+    fallSpeed: 1.0,
+  };
+}
+
+// ── Helpers ──
+function getWordPool() {
+  if (state.level >= 3) return [...WORDS_SHORT, ...WORDS_MEDIUM, ...WORDS_LONG];
+  if (state.level >= 2) return [...WORDS_SHORT, ...WORDS_MEDIUM];
+  return WORDS_SHORT;
+}
+
+function pickWord() {
+  const pool = getWordPool();
+  // Avoid duplicates on screen
+  let word;
+  let attempts = 0;
+  do {
+    word = pool[Math.floor(Math.random() * pool.length)];
+    attempts++;
+  } while (state.words.some(w => w.text === word) && attempts < 20);
+  return word;
+}
+
+function wordColor(len) {
+  if (len <= 4) return { r: 72, g: 220, b: 120 };      // green
+  if (len <= 6) return { r: 255, g: 210, b: 60 };       // yellow
+  return { r: 255, g: 80, b: 100 };                      // red
+}
+
+function colorStr(c, a) {
+  return `rgba(${c.r},${c.g},${c.b},${a !== undefined ? a : 1})`;
+}
+
+// ── Spawn ──
+function spawnWord() {
+  const text = pickWord();
+  const fontSize = 22;
+  ctx.font = `700 ${fontSize}px 'Segoe UI', system-ui, sans-serif`;
+  const metrics = ctx.measureText(text);
+  const w = metrics.width + 28;
+  const x = Math.random() * (canvas.width - w - 40) + 20;
+  const color = wordColor(text.length);
+  state.words.push({
+    text,
+    x,
+    y: -40,
+    w,
+    h: 38,
+    speed: state.fallSpeed * (0.8 + Math.random() * 0.4),
+    color,
+    opacity: 0,
+    matched: false,
+    matchLen: 0,
+  });
+}
+
+// ── Particles ──
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 4;
+    state.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      r: 2 + Math.random() * 4,
+      color,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.025,
+    });
+  }
+}
+
+function spawnPopup(x, y, text, color) {
+  state.popups.push({ x, y, text, color, life: 1, decay: 0.018 });
+}
+
+// ── Flash ──
+const flashEl = document.getElementById('flash');
+function flashRed() {
+  flashEl.classList.add('active');
+  setTimeout(() => flashEl.classList.remove('active'), 150);
+}
+
+// ── Matching ──
+const input = document.getElementById('word-input');
+input.addEventListener('input', () => {
+  if (state.gameOver) return;
+  const typed = input.value.toLowerCase().trim();
+
+  // Update partial match highlights
+  state.words.forEach(w => {
+    if (typed.length > 0 && w.text.startsWith(typed)) {
+      w.matched = true;
+      w.matchLen = typed.length;
+    } else {
+      w.matched = false;
+      w.matchLen = 0;
+    }
+  });
+
+  // Check for exact match
+  const idx = state.words.findIndex(w => w.text === typed);
+  if (idx !== -1) {
+    const w = state.words[idx];
+    // Score
+    state.combo++;
+    if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+    const points = Math.round(w.text.length * 10 * (1 + state.combo * 0.1));
+    state.score += points;
+    state.wordsDestroyed++;
+
+    // Effects
+    spawnParticles(w.x + w.w / 2, w.y + w.h / 2, w.color, 18);
+    spawnPopup(w.x + w.w / 2, w.y, `+${points}`, w.color);
+    if (state.combo >= 3) {
+      spawnPopup(w.x + w.w / 2, w.y - 28, `${state.combo}x COMBO!`, { r: 255, g: 255, b: 100 });
+    }
+
+    // Remove word
+    state.words.splice(idx, 1);
+    input.value = '';
+
+    // Level up
+    if (state.wordsDestroyed % 10 === 0) {
+      state.level++;
+      state.fallSpeed = 1.0 + (state.level - 1) * 0.25;
+      state.spawnInterval = Math.max(800, 2000 - (state.level - 1) * 200);
+    }
+
+    updateHUD();
+  }
+});
+
+// ── HUD ──
+const hScore = document.getElementById('h-score');
+const hLevel = document.getElementById('h-level');
+const hCombo = document.getElementById('h-combo');
+const hLives = document.getElementById('h-lives');
+function updateHUD() {
+  hScore.textContent = state.score;
+  hLevel.textContent = state.level;
+  hCombo.textContent = state.combo;
+  hLives.textContent = state.lives;
+}
+
+// ── Draw ──
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, '#0a0a1a');
+  grad.addColorStop(1, '#151530');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+
+  // Danger zone at bottom
+  const dangerGrad = ctx.createLinearGradient(0, canvas.height - 100, 0, canvas.height);
+  dangerGrad.addColorStop(0, 'rgba(255,0,0,0)');
+  dangerGrad.addColorStop(1, 'rgba(255,0,0,0.06)');
+  ctx.fillStyle = dangerGrad;
+  ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+}
+
+function drawWord(w) {
+  const alpha = w.opacity;
+  // Glow for matched word
+  if (w.matched) {
+    ctx.shadowColor = colorStr(w.color, 0.8);
+    ctx.shadowBlur = 16 + Math.sin(Date.now() * 0.008) * 6;
+  } else {
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+  }
+
+  // Background pill
+  const radius = 8;
+  ctx.beginPath();
+  ctx.roundRect(w.x, w.y, w.w, w.h, radius);
+  ctx.fillStyle = w.matched
+    ? `rgba(${w.color.r},${w.color.g},${w.color.b},${0.2 * alpha})`
+    : `rgba(20,20,40,${0.85 * alpha})`;
+  ctx.fill();
+  ctx.strokeStyle = colorStr(w.color, 0.5 * alpha);
+  ctx.lineWidth = w.matched ? 2 : 1;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Text
+  ctx.font = '700 22px "Segoe UI", system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (w.matched && w.matchLen > 0) {
+    // Draw matched portion highlighted
+    const full = w.text;
+    const matchedPart = full.slice(0, w.matchLen);
+    const restPart = full.slice(w.matchLen);
+
+    const fullWidth = ctx.measureText(full).width;
+    const matchedWidth = ctx.measureText(matchedPart).width;
+    const startX = w.x + w.w / 2 - fullWidth / 2;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.fillText(matchedPart, startX, w.y + w.h / 2);
+    ctx.fillStyle = colorStr(w.color, 0.6 * alpha);
+    ctx.fillText(restPart, startX + matchedWidth, w.y + w.h / 2);
+  } else {
+    ctx.fillStyle = colorStr(w.color, 0.9 * alpha);
+    ctx.fillText(w.text, w.x + w.w / 2, w.y + w.h / 2);
+  }
+  ctx.textAlign = 'left';
+}
+
+function drawParticles() {
+  state.particles.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fillStyle = colorStr(p.color, p.life * 0.8);
+    ctx.fill();
+  });
+}
+
+function drawPopups() {
+  state.popups.forEach(p => {
+    ctx.font = `700 ${18 + (1 - p.life) * 8}px "Segoe UI", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = colorStr(p.color, p.life);
+    ctx.fillText(p.text, p.x, p.y);
+  });
+  ctx.textAlign = 'left';
+}
+
+// ── Update ──
+function update(now) {
+  // Spawn
+  if (now - state.lastSpawn > state.spawnInterval) {
+    spawnWord();
+    state.lastSpawn = now;
+  }
+
+  // Move words
+  const inputBottom = canvas.height - 90;
+  for (let i = state.words.length - 1; i >= 0; i--) {
+    const w = state.words[i];
+    w.y += w.speed;
+    if (w.opacity < 1) w.opacity = Math.min(1, w.opacity + 0.04);
+
+    // Hit bottom
+    if (w.y + w.h > inputBottom) {
+      state.words.splice(i, 1);
+      state.lives--;
+      state.combo = 0;
+      flashRed();
+      updateHUD();
+      if (state.lives <= 0) {
+        endGame();
+        return;
+      }
+    }
+  }
+
+  // Update particles
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05;
+    p.life -= p.decay;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  // Update popups
+  for (let i = state.popups.length - 1; i >= 0; i--) {
+    const p = state.popups[i];
+    p.y -= 1.2;
+    p.life -= p.decay;
+    if (p.life <= 0) state.popups.splice(i, 1);
+  }
+}
+
+// ── Game Over ──
+function endGame() {
+  state.gameOver = true;
+  const elapsed = Math.round((Date.now() - state.startTime) / 1000);
+  document.getElementById('s-score').textContent = state.score;
+  document.getElementById('s-words').textContent = state.wordsDestroyed;
+  document.getElementById('s-combo').textContent = state.maxCombo;
+  document.getElementById('s-time').textContent = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+  document.getElementById('s-level').textContent = state.level;
+  document.getElementById('game-over').classList.add('visible');
+  input.blur();
+}
+
+// ── Main Loop ──
+let animId;
+function loop() {
+  if (state.gameOver) return;
+  const now = Date.now();
+  update(now);
+  drawBackground();
+  state.words.forEach(drawWord);
+  drawParticles();
+  drawPopups();
+  animId = requestAnimationFrame(loop);
+}
+
+// ── Start / Restart ──
+function startGame() {
+  initState();
+  updateHUD();
+  document.getElementById('game-over').classList.remove('visible');
+  document.getElementById('start-screen').classList.add('hidden');
+  input.value = '';
+  input.focus();
+  state.lastSpawn = Date.now();
+  if (animId) cancelAnimationFrame(animId);
+  loop();
+}
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('play-again').addEventListener('click', startGame);
+
+// Keep input focused during gameplay
+document.addEventListener('click', () => {
+  if (!state || state.gameOver) return;
+  input.focus();
+});
+document.addEventListener('keydown', (e) => {
+  if (!state || state.gameOver) return;
+  if (document.activeElement !== input) {
+    input.focus();
+  }
+});
+</script>
+</body>
+</html>
